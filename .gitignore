@@ -8,3 +8,6 @@ venv/
 wandb/
 outputs/
 checkpoints/
+
+# 비공개 메모
+docs/internal/
