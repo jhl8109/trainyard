@@ -106,7 +106,7 @@ RL 파인튜닝 자체는 시뮬 작업이지만 v3 뒤에 배치한다. 이유�
 - GPU: RTX 4060 Ti **8GB** — ACT 학습 · 추론, 상태 기반 RL, SmolVLA급 파인튜닝까지
 - RAM: 32GB
 - OS: Linux Mint 22.3
-- 드라이버: 현재 nouveau → NVIDIA 드라이버(`nvidia-driver-595-open`) 설치 필요
+- 드라이버: `nvidia-driver-595-open` 595.91.07 — CUDA 13.2 · sm_89 동작 확인 (검증 절차는 [`scripts/verify_env.sh`](scripts/verify_env.sh))
 
 실물(v3): SO-101 리더 + 팔로워, USB 웹캠 2대(탑뷰 · 손목), 예비 STS3215 서보. v2 시작 시 주문해 배송 · 조립 리드타임을 확보한다.
 
