@@ -50,7 +50,23 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
    gh pr create --base <base> --title "..." --body "..."   # 템플릿 채우기, Fixes TY-14
    ```
 
-8. **자동 머지 판단** — `CLAUDE.md` "반드시 사람에게 넘기는 것" 2번의 조건을 **전부** 만족할 때만 `gh pr merge --auto --squash`를 건다(CI 통과 시 머지된다). 하나라도 어긋나면 걸지 않고 사람에게 남긴다. 조건은 구현 티켓(`model/opus` 없음) · 보호 경로 미변경 · 평가 수치 불변 · CI 필수 검사 활성화.
+8. **자동 머지 판단** — 네 조건을 **전부** 만족할 때만 `gh pr merge --auto --squash`를 건다. 하나라도 어긋나면 걸지 않고 사람에게 남긴다.
+
+   | # | 조건 | 확인 |
+   |---|---|---|
+   | 1 | CI 필수 검사가 ruleset에 걸려 있다 | `gh api repos/{owner}/{repo}/rulesets --jq '.[].id'` → 각 ruleset에서 `required_status_checks` 존재 |
+   | 2 | 구현 티켓이다 (`model/opus` 라벨 없음) | `python3 scripts/ty.py show TY-14 \| head -1` → `→ sonnet` |
+   | 3 | 보호 경로를 건드리지 않았다 | `gh pr diff <N> --name-only` |
+   | 4 | 평가 수치를 바꾸지 않는다 | 조건표 · 성공 판정 · 보상에 영향이 없다 |
+
+   보호 경로: `ros2_ws/src/ty_msgs/**` · `config/**` · `docs/interfaces.md` · `docs/task-pick-place.md` · `docs/design.md` · `platform/src/trainyard/evaluation/**` · DB 마이그레이션. 여기에 걸리면 다른 티켓이 읽는 약속을 바꾼 것이므로 사람이 본다.
+
+   ```bash
+   gh pr diff 12 --name-only            # 3번 확인
+   gh pr merge 12 --auto --squash       # 네 조건 모두 만족할 때만
+   ```
+
+   **조건 1이 아직 거짓이다** (CI 없음 — TY-5, 활성화는 TY-138). 그러니 지금은 **어떤 PR에도 자동 머지를 걸지 않는다.** `--auto`는 필수 검사가 없으면 즉시 머지로 동작해서, 검증 없이 main에 들어간다. 조건 1이 참이 되면 이 문단을 지운다.
 
 9. **Linear 마감**
    ```bash
@@ -99,7 +115,9 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
 
 ## 하지 않는 것
 
-- PR 머지 (사람이 한다)
+- PR 머지 (사람이 한다). 8단계의 네 조건을 전부 만족할 때의 `--auto`만 예외이고, 인자 없는 `gh pr merge`는 쓰지 않는다
+- 막힌 티켓을 더 큰 모델로 재시도 — 약속을 바꿔야 해서 막힌 것이면 사람 게이트다
+- `model/opus` 라벨 임의 변경 — 틀려 보이면 보고에만 적는다
 - `main` 직접 push, force push
 - 설계 숫자 변경 — 태스크 정의 · 평가 조건표 · 인터페이스 계약은 spike에서 사람이 정한다
 - 하드웨어 주문, 레포 설정 변경, 공개 범위 변경
