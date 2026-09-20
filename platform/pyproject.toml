@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trainyard"
+version = "0.0.0"
+description = "TrainYard 플랫폼 — 데이터 파이프라인 · 학습 · 평가 · 잡 큐 API"
+requires-python = ">=3.12"
+# 런타임 의존성은 여기에 적지 않는다. 고정 버전의 단일 출처는 레포 루트의
+# requirements.txt 이고(`uv pip install -r requirements.txt`), 이 파일은
+# `trainyard` 패키지를 import 가능하게 만드는 역할만 한다.
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -49,6 +49,55 @@
 - **Job Queue**: PostgreSQL 테이블 큐(`SELECT … FOR UPDATE SKIP LOCKED`), 상태 머신 `queued → running → succeeded | failed | cancelled`, 체크포인트 기반 재개, 재현성 메타데이터(git SHA · config 해시 · 데이터셋 버전). IL 학습 · RL 파인튜닝 · 평가 잡이 같은 큐를 쓴다.
 - **RL 파인튜닝**: 동결된 IL 정책 위에 residual policy를 올려 시뮬에서 학습한다. 보상은 v1 평가 성공 판정 로직을 그대로 재사용한다.
 
+## 레포 구조
+
+```
+trainyard/
+├── ros2_ws/src/        로봇 런타임 — colcon이 빌드하는 ROS 2 패키지
+│   ├── ty_msgs/          인터페이스 메시지 (ActionChunk · EpisodeMeta)
+│   ├── ty_sim/           MuJoCo Hardware Interface 노드
+│   ├── ty_teleop/        게임패드 → IK → joint_command
+│   ├── ty_recorder/      에피소드 세션 · rosbag2(MCAP) 기록
+│   ├── ty_policy/        정책 추론 노드
+│   └── ty_bringup/       launch 파일
+├── platform/           ROS 바깥 — 데이터 · 학습 · 평가 · 잡 큐 (`trainyard` 패키지)
+│   ├── src/trainyard/    data · policies · training · evaluation · api
+│   └── tests/
+├── config/             양쪽이 공유하는 설정 (태스크 정의)
+├── scripts/            환경 검증 등 개발 스크립트
+└── docs/               설계 · 계약 · 셋업 문서
+```
+
+가르는 기준은 하나다. **ROS 2를 source 해야 돌아가는 코드만 `ros2_ws/`에 둔다.** 학습·평가·API는
+로봇이 없어도 돌아야 하고 CI에서도 ROS 없이 테스트되므로 `platform/`에 남는다. 둘이 만나는 지점은
+`ty_policy`(체크포인트를 읽어 추론)와 `config/`(같은 태스크 정의 파일) 두 곳뿐이다.
+
+| 아키텍처 구성요소 | 사는 곳 |
+|---|---|
+| Hardware Interface · Controller | `ros2_ws/src/ty_sim` → v3에서 `ty_hw_so101`로 교체 |
+| Teleop 입력 | `ros2_ws/src/ty_teleop` |
+| rosbag2 recorder | `ros2_ws/src/ty_recorder` |
+| Policy 추론 노드 | `ros2_ws/src/ty_policy` |
+| Data Pipeline · Model Registry · Job Queue · 평가 DB | `platform/src/trainyard/` |
+| IL 학습 · RL 파인튜닝 | `platform/src/trainyard/{training,policies}` |
+
+50Hz C++ 제어 루프(`ty_control`)와 실물 서보 드라이버(`ty_hw_so101`)는 각각 v2 · v3에서 추가된다.
+지금 빈 패키지로 만들어두지 않는 것은, 인터페이스가 고정되기 전에 껍데기를 먼저 박으면
+그 껍데기가 설계를 끌고 가기 때문이다.
+
+### 빌드와 테스트
+
+```bash
+# 플랫폼 (ROS 불필요)
+pytest
+
+# ROS 2 워크스페이스
+source /opt/ros/jazzy/setup.bash
+cd ros2_ws && colcon build && colcon test
+```
+
+래퍼 스크립트는 TY-3, 린터 설정은 TY-4, CI는 TY-5에서 붙인다.
+
 ## 로드맵
 
 | 릴리즈 | 범위 | 기간 | 상태 |
