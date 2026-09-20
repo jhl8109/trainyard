@@ -2,17 +2,47 @@
 
 이 머신(Linux Mint 22.3 = Ubuntu 24.04 noble / RTX 4060 Ti 8GB)에서 TrainYard를 돌리기 위해 설치해야 하는 것들. 릴리즈 순서대로 정리했고, **1단계는 재부팅이 필요하며 이후 모든 GPU 작업의 전제**다.
 
-## 현재 상태 (2026-09-20 점검)
+## 현재 상태 (2026-09-20)
 
 | 항목 | 상태 |
 |---|---|
 | OS | Linux Mint 22.3 (zena) — Ubuntu 24.04 noble 기반, ROS 2 Jazzy 타깃과 일치 |
-| GPU 드라이버 | ❌ nouveau 사용 중. `nvidia-smi` 없음 |
-| Secure Boot | disabled — 드라이버 설치 시 MOK 등록 불필요 |
-| ROS 2 | ❌ `/opt/ros` 없음 |
-| Python | 3.12.3 (시스템) — pip · venv 모두 미설치 |
-| 툴체인 | git ✓ / g++ ✓ / cmake ❌ docker ❌ uv ❌ colcon ❌ rosdep ❌ psql ❌ |
-| 디스크 | 155GB 여유 |
+| GPU 드라이버 | ✅ `nvidia-driver-595-open` 595.91.07 동작 — RTX 4060 Ti 7.6GB, sm_89, CUDA 13.2 |
+| Secure Boot | disabled — MOK 등록 불필요 |
+| ROS 2 | ✅ Jazzy (`ros-jazzy-desktop` + 프로젝트 패키지 13종), rosdep 캐시 완료 |
+| Python | ✅ 3.12.3 + `.venv` (96 패키지) — `rclpy`·`torch`·`mujoco`·`lerobot` 동시 import 확인 |
+| 툴체인 | ✅ git · g++ · cmake · colcon · rosdep · vcs · psql · uv / ❌ docker (v1) |
+| 디스크 | 142GB 여유 |
+
+### 셋업 완료 검증 (재부팅 후 실측)
+
+| 검증 | 결과 |
+|---|---|
+| `nvidia-smi` | 595.91.07 / RTX 4060 Ti / 8188MiB — nouveau 언로드, `nvidia_uvm`·`nvidia_drm` 로드 |
+| `torch.cuda` | `True`, sm_89, VRAM 7.6GB, 4000×4000 matmul 성공 |
+| MuJoCo GPU 렌더 | `MUJOCO_GL=egl` 오프스크린 480×640 렌더 성공 (`libEGL_nvidia.so.595.91.07`) |
+| MuJoCo 물리 | SO-101 100·2000스텝 정상 |
+| ROS 2 통신 | `demo_nodes_cpp talker` → `/chatter` 수신 확인 |
+| venv 통합 | `rclpy` + `torch` + `mujoco` + `lerobot` 동시 import |
+
+전체 재현 명령은 [`scripts/verify_env.sh`](../scripts/verify_env.sh) 참고.
+
+### TTY 없는 셸에서 sudo 쓰기
+
+에이전트 셸이나 스크립트처럼 TTY가 없는 환경에서 `sudo`는 `sudo: a terminal is required to read the password`로 실패한다. GUI 세션(X11)이 있으면 zenity로 비밀번호 창을 띄워 해결한다. 비밀번호는 화면 창에 직접 입력되므로 로그나 명령 히스토리에 남지 않는다.
+
+```bash
+cat > ~/.local/bin/zenity-askpass <<'EOF'
+#!/bin/sh
+exec zenity --password --title="sudo" 2>/dev/null
+EOF
+chmod +x ~/.local/bin/zenity-askpass
+
+export SUDO_ASKPASS=~/.local/bin/zenity-askpass DISPLAY=:0
+sudo -A id     # uid=0(root) 나오면 성공. 이후 몇 분간 캐시됨
+```
+
+`sudo -A`의 `-A`가 askpass 헬퍼를 쓰라는 플래그다. `pkexec`도 대안이지만 환경변수를 정리해버려서 `apt`에 `DEBIAN_FRONTEND` 같은 걸 넘기기 번거롭다.
 
 ### Linux Mint 주의점
 
@@ -31,8 +61,9 @@ Mint는 `lsb_release -cs`가 `zena`를 반환한다. ROS 2 · NVIDIA · Docker �
 ```bash
 sudo apt update
 sudo apt install -y nvidia-driver-595-open
-sudo reboot
 ```
+
+> **재부팅은 3단계까지 끝낸 뒤에 한 번만 한다.** 재부팅이 필요한 것은 커널 모듈이 바뀌는 드라이버뿐이고, 2·3단계(툴체인 · ROS 2)는 전부 평범한 apt 설치라 GPU와 무관하게 먼저 깔아도 된다. 드라이버 설치와 재부팅 사이에 ROS 2를 깔면 재부팅 횟수가 둘에서 하나로 줄어든다.
 
 재부팅 후 검증:
 
@@ -74,10 +105,10 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ```bash
 sudo add-apt-repository universe          # Mint는 이미 활성화돼 있음
-ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infra/ros-apt-source/releases/latest \
+ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest \
   | grep -F '"tag_name"' | awk -F'"' '{print $4}')
 curl -L -o /tmp/ros2-apt-source.deb \
-  "https://github.com/ros-infra/ros-apt-source/releases/download/${ROS_APT_SOURCE_VERSION}/ros2-apt-source_${ROS_APT_SOURCE_VERSION}.$(. /etc/os-release && echo $UBUNTU_CODENAME)_all.deb"
+  "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_SOURCE_VERSION}/ros2-apt-source_${ROS_APT_SOURCE_VERSION}.$(. /etc/os-release && echo $UBUNTU_CODENAME)_all.deb"
 sudo apt install -y /tmp/ros2-apt-source.deb
 sudo apt update
 ```
@@ -131,7 +162,7 @@ source .venv/bin/activate
 
 ```bash
 # 시뮬레이션
-uv pip install mujoco mujoco-python-viewer
+uv pip install mujoco
 
 # 학습 (RTX 4060 Ti = Ada, sm_89)
 uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
@@ -191,8 +222,9 @@ sudo usermod -aG docker $USER   # 재로그인 필요
 
 ```bash
 sudo apt install -y postgresql-client   # psql만 (서버는 컨테이너)
-uv pip install fastapi uvicorn "psycopg[binary]" sqlalchemy alembic pydantic-settings
 ```
+
+파이썬 쪽은 이미 설치돼 있다 (`fastapi` · `uvicorn` · `psycopg[binary]` · `sqlalchemy` · `alembic` · `pydantic-settings`). sudo가 필요 없어 4단계에서 함께 처리했다.
 
 ## 6단계 — 추론 최적화 (v2)
 
@@ -228,19 +260,32 @@ sudo apt install -y nvtop htop tmux ros-jazzy-rqt-common-plugins
 ## 순서 요약 / 진행 상황
 
 ```
-1. nvidia-driver-595-open → 재부팅 → nvidia-smi 확인   ⬜ 미완 ← 블로킹
-2. build-essential cmake ffmpeg libglfw3 ...            ⬜ 미완 (sudo 필요)
+1. nvidia-driver-595-open 595.91.07                      ✅ 설치
+2. build-essential cmake ffmpeg libglfw3 ... (17종)      ✅ 설치
    uv                                                    ✅ 0.12.17
-3. ROS 2 Jazzy (desktop + dev-tools + 프로젝트 패키지)  ⬜ 미완 (sudo 필요)
-4. venv + mujoco 3.13 / torch 2.11+cu128 / lerobot 0.6.1 ✅ 완료
+3. ROS 2 Jazzy (desktop + dev-tools + 패키지 13종)       ✅ 설치
+   rosdep init + update                                  ✅ 캐시 생성
+   ─────── 👉 지금 재부팅 (총 1회) ───────
+4. venv + mujoco 3.13 / torch 2.11+cu128 / lerobot 0.6.1 ✅ 완료 (96 패키지)
+   rclpy + torch + mujoco + lerobot 동시 import          ✅ 검증
    mujoco_menagerie (SO-101 모델 로드·시뮬 검증)         ✅ 완료
-5. (v1) Docker + PostgreSQL 컨테이너 + FastAPI           ⬜
-6. (v2) onnxruntime-gpu, tensorrt                        ⬜
-7. (v3) feetech SDK + dialout + udev                     ⬜
+5. (v1) FastAPI · SQLAlchemy · psycopg · alembic         ✅ 완료
+        postgresql-client                                ✅ 설치
+        Docker + PostgreSQL 컨테이너                     ⬜ sudo
+6. (v2) onnx, onnxruntime-gpu, tensorrt                  ⬜ 의도적 보류 (아래)
+7. (v3) feetech SDK + dialout + udev                     ⬜ 하드웨어 도착 후
 ```
 
-sudo 비밀번호가 필요한 단계(1·2·3)는 직접 실행해야 한다. 재로그인이 필요한 그룹 추가(`docker`, `dialout`)는 모아서 한 번에 처리하면 좋다.
+sudo가 필요한 단계는 직접 실행해야 한다. 재로그인이 필요한 그룹 추가(`docker`, `dialout`)는 모아서 한 번에 처리하면 좋다.
 
-드라이버 설치 전까지 `torch.cuda.is_available()`는 `False`다. 이것 자체는 정상이며, 재부팅 후 `True`로 바뀌는지 확인하는 것이 1단계의 완료 조건이다.
+### v2 추론 스택을 미리 깔지 않는 이유
+
+`onnxruntime-gpu` · `tensorrt`는 sudo가 필요 없어 지금도 깔 수 있지만 보류했다. 두 휠 모두 CUDA · cuDNN 라이브러리를 자체 핀으로 끌어오는데, 이게 PyTorch가 가져온 `nvidia-*-cu12` 패키지들과 버전 싸움을 한다. 실제로 쓰지도 않는 v2 의존성 때문에 지금 동작하는 학습 환경이 깨질 이유가 없다. v2 착수 시 설치하고 그때 `uv pip check`로 정리한다.
+
+### 알아둘 점
+
+- 드라이버 설치 전까지 `torch.cuda.is_available()`는 `False`다. 정상이며, 재부팅 후 `True`로 바뀌는지 확인하는 것이 1단계 완료 조건이다.
+- venv는 7.1GB다 (torch + 번들 CUDA 라이브러리). 디스크는 144GB 남아 충분하다.
+- uv로 만든 venv에는 `pip`이 없다. `uv pip`으로 관리하면 되지만, venv 내부 `pip`을 요구하는 도구를 만나면 `uv pip install pip`으로 넣는다.
 
 
