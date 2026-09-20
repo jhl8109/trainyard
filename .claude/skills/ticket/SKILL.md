@@ -50,14 +50,16 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
    gh pr create --base <base> --title "..." --body "..."   # 템플릿 채우기, Fixes TY-14
    ```
 
-8. **Linear 마감**
+8. **자동 머지 판단** — `CLAUDE.md` "반드시 사람에게 넘기는 것" 2번의 조건을 **전부** 만족할 때만 `gh pr merge --auto --squash`를 건다(CI 통과 시 머지된다). 하나라도 어긋나면 걸지 않고 사람에게 남긴다. 조건은 구현 티켓(`model/opus` 없음) · 보호 경로 미변경 · 평가 수치 불변 · CI 필수 검사 활성화.
+
+9. **Linear 마감**
    ```bash
    python3 scripts/ty.py comment TY-14 "결정 · 수치 · 다음 티켓이 알아야 할 것 + PR 링크"
    python3 scripts/ty.py state TY-14 "In Review"
    ```
    다른 티켓의 전제를 바꿨다면 그 티켓에도 코멘트를 남긴다. 워크트리는 **지우지 않는다** — PR이 머지된 뒤 `worktree.sh prune`이 걷어간다.
 
-9. **3줄 요약** — 무엇을 했나 / 수치 / 사용자에게 필요한 결정(머지 포함).
+10. **3줄 요약** — 무엇을 했나 / 수치 / 사용자에게 필요한 결정(머지 포함).
 
 ## 큐 모드 — `/ticket next`
 
@@ -71,15 +73,19 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
    ```
    `next`의 "진행 중" 항목은 **사람이 머지해야 열리는 것들**이다. 큐가 비어 있으면 더 할 일이 없는 게 아니라 머지 대기다 — 그 목록을 사용자에게 보여주고 멈춘다.
 
-2. 큐에 나온 티켓들에 대해 `Agent`를 띄운다(`subagent_type: "general-purpose"`). 큐의 티켓은 서로 다른 epic에 속하고 전부 main에서 갈라지므로 **동시에 띄워도 된다.** 프롬프트에 넣을 것:
+2. 큐에 나온 티켓들에 대해 `Agent`를 띄운다(`subagent_type: "general-purpose"`). 큐의 티켓은 서로 다른 epic에 속하고 전부 main에서 갈라지므로 **동시에 띄워도 된다.**
+
+   **모델은 `ty.py next`가 티켓마다 찍어준 값을 그대로 `model` 인자에 넣는다** — `opus`(구조 티켓) 또는 `sonnet`(구현 티켓). 드라이버가 임의로 바꾸지 않는다. 판단 기준은 `CLAUDE.md` "어느 모델로 도는가"에 있고, 라벨이 틀렸다고 보이면 고치지 말고 보고에 적는다.
+
+   프롬프트에 넣을 것:
    - 티켓 번호와 "`.claude/skills/ticket/SKILL.md`의 단일 모드 1~8단계를 따르라"
    - 저장소 경로와 `CLAUDE.md`를 먼저 읽으라는 지시
-   - 돌려줄 보고 형식: `티켓 / PR 링크 / 수치 / 막힌 점(있으면)` 4줄
+   - 돌려줄 보고 형식: `티켓 / 모델 / PR 링크 / 수치 / 막힌 점(있으면)` 5줄
 
 3. 에이전트 보고를 받으면 큐를 다시 읽는다. **다음 중 하나면 멈추고 사용자에게 보고한다.**
    - 큐가 비었다 — 머지 대기다. 머지할 PR 목록을 보여준다
    - 큐에 `type/spike` · `needs/decision`만 남았다
-   - 에이전트가 막혔다고 보고했다 (그 티켓에 `needs/decision` 라벨이 붙어 있는지 확인)
+   - 에이전트가 막혔다고 보고했다 (그 티켓에 `needs/decision` 라벨이 붙어 있는지 확인). **Opus로 다시 돌리지 않는다** — 약속을 바꿔야 해서 막힌 것이면 사람 게이트다
    - 에이전트가 실패했거나 CI가 깨졌다
    - 사용자가 지정한 티켓 수를 소화했다 (기본 3개)
 

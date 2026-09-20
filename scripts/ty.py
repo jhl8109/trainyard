@@ -4,7 +4,7 @@
 API 키는 ~/.config/trainyard/linear.env 또는 환경변수 LINEAR_API_KEY.
 
   ty.py show TY-14                 티켓 본문 + 코멘트
-  ty.py next [-n 5]                작업 가능한 티켓 큐 (릴리즈 → 번호 순)
+  ty.py next [-n 5]                작업 가능한 티켓 큐 (+ 티켓별 모델)
   ty.py state TY-14 "In Review"    상태 변경
   ty.py comment TY-14 "본문"        코멘트 (본문 생략 시 stdin)
   ty.py label TY-14 needs/decision 라벨 추가
@@ -25,6 +25,8 @@ API = "https://api.linear.app/graphql"
 ENV_FILE = Path.home() / ".config/trainyard/linear.env"
 # 큐에서 제외: 사람 판단이 필요한 것들
 BLOCKING_LABELS = {"type/spike", "needs/decision"}
+# 구조 티켓(다른 코드가 지켜야 할 약속을 만든다)만 Opus로 돈다. 기본값은 Sonnet.
+OPUS_LABEL = "model/opus"
 # 상태는 이름이 아니라 Linear 상태 타입으로 판정한다 (팀이 이름을 바꿔도 안 깨진다)
 DONE_TYPES = {"completed", "canceled", "duplicate"}
 STARTED_TYPES = {"started"}        # In Progress · In Review = 누군가 잡고 있다
@@ -92,10 +94,15 @@ def release_order(project_name: str | None) -> tuple[int, str]:
     return (int(m.group(1)) if m else 98, project_name)
 
 
+def model_of(issue: dict) -> str:
+    """이 티켓을 어느 모델로 돌릴지. 라벨이 유일한 출처다."""
+    return "opus" if OPUS_LABEL in {n["name"] for n in issue["labels"]["nodes"]} else "sonnet"
+
+
 def cmd_show(args) -> None:
     issue = find_issue(args.ident)
     labels = ", ".join(n["name"] for n in issue["labels"]["nodes"]) or "-"
-    print(f"{issue['identifier']}  {issue['title']}")
+    print(f"{issue['identifier']}  {issue['title']}   → {model_of(issue)}")
     print(f"  상태 {issue['state']['name']} · 프로젝트 {issue['project']['name'] if issue['project'] else '-'} · 라벨 {labels}")
     if issue["parent"]:
         print(f"  부모 {issue['parent']['identifier']} {issue['parent']['title']}")
@@ -171,7 +178,7 @@ def cmd_next(args) -> None:
         print("  (없음 — 아래 '진행 중'을 머지하면 다음 티켓이 열린다)")
     for i in sorted(queue, key=sort_key)[: args.count]:
         proj = i["project"]["name"] if i["project"] else "-"
-        print(f"  {i['identifier']:8} [{proj[:24]:26}] {i['title']}")
+        print(f"  {i['identifier']:8} {model_of(i):6} [{proj[:24]:26}] {i['title']}")
 
     if waiting:
         print("\n진행 중 — 이게 Done이 돼야 같은 epic의 다음 티켓이 열린다")
@@ -227,9 +234,9 @@ def cmd_label(args) -> None:
 
 def cmd_sub(args) -> None:
     parent = find_issue(args.ident)
-    detail = gql("query($id:String!){ issue(id:$id){ teamId project { id } labels { nodes { id } } } }",
+    detail = gql("query($id:String!){ issue(id:$id){ team { id } project { id } labels { nodes { id } } } }",
                  {"id": parent["id"]})["issue"]
-    inp = {"teamId": detail["teamId"], "parentId": parent["id"], "title": args.title,
+    inp = {"teamId": detail["team"]["id"], "parentId": parent["id"], "title": args.title,
            "labelIds": [n["id"] for n in detail["labels"]["nodes"]]}
     if detail["project"]:
         inp["projectId"] = detail["project"]["id"]
