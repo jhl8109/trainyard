@@ -1,0 +1,6 @@
+# 레포 루트 설정. 지금은 pytest 진입점만 잡는다.
+# 린터(ruff · clang-format) 설정은 TY-4, CI는 TY-5에서 추가한다.
+
+[tool.pytest.ini_options]
+testpaths = ["platform/tests"]
+pythonpath = ["platform/src"]

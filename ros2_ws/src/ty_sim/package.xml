@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>ty_sim</name>
+  <version>0.0.0</version>
+  <description>MuJoCo 시뮬레이션 Hardware Interface 노드 — joint_states 퍼블리시 · joint_command 구독 · 카메라 렌더 · 씬 리셋</description>
+  <maintainer email="jhl81094@gmail.com">jhl8109</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>ty_msgs</exec_depend>
+
+  <!-- 린터는 TY-4에서 ruff로 통일한다. ament_flake8 · ament_pep257은 쓰지 않는다. -->
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

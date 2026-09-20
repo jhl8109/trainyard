@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>ty_teleop</name>
+  <version>0.0.0</version>
+  <description>게임패드 텔레오퍼레이션 — joy → end-effector twist → IK → joint_command</description>
+  <maintainer email="jhl81094@gmail.com">jhl8109</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>ty_msgs</exec_depend>
+
+  <!-- 린터는 TY-4에서 ruff로 통일한다. ament_flake8 · ament_pep257은 쓰지 않는다. -->
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
