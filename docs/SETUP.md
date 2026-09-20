@@ -150,6 +150,13 @@ sudo apt install -y \
 source /opt/ros/jazzy/setup.bash
 ```
 
+레포 안에서 작업할 때는 이것 하나로 대신한다 — underlay · `ros2_ws/install` 오버레이 · venv를
+한 번에 얹는다.
+
+```bash
+source scripts/env.sh
+```
+
 ## 4단계 — 시뮬레이션 · 학습 (v0 사이드 → v1)
 
 ROS 2 파이썬 노드와 학습 코드를 **같은 venv에 두려면 `--system-site-packages`가 필수**다. 그래야 venv 안에서 `rclpy`(apt로 설치된 시스템 패키지)가 보인다. 이걸 빼면 파이썬 노드가 import 에러로 죽는다.

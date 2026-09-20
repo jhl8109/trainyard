@@ -92,11 +92,24 @@ trainyard/
 pytest
 
 # ROS 2 워크스페이스
-source /opt/ros/jazzy/setup.bash
-cd ros2_ws && colcon build && colcon test
+scripts/build.sh                    # 전체 빌드
+scripts/build.sh --test             # 빌드 + colcon test + 실패 요약
+scripts/build.sh ty_msgs ty_sim     # 그 패키지와 의존 패키지까지
+scripts/build.sh --clean            # build/ install/ log/ 지우고 처음부터
+
+source scripts/env.sh               # 빌드 결과를 셸에 붙인다 (ros2 run · launch 하기 전)
 ```
 
-래퍼 스크립트는 TY-3, 린터 설정은 TY-4, CI는 TY-5에서 붙인다.
+`scripts/env.sh`는 ROS 2 underlay → `ros2_ws/install` 오버레이 → venv 순으로 한 셸에 얹는다.
+`.venv/bin`을 `PATH`에 넣지 않고 venv의 `site-packages`만 `PYTHONPATH`에 붙이는데,
+`requirements.txt`가 고정한 pip cmake 4.x가 apt cmake 3.28을 가리면 ROS 2 패키지의
+`cmake_minimum_required`를 거부해 빌드가 깨지기 때문이다. 파이썬 인터프리터가 직접 필요하면
+`$TY_PYTHON`(= `.venv/bin/python`)을 쓴다.
+
+빌드 옵션은 `ros2_ws/colcon-defaults.yaml` 한 곳에 있다. `scripts/env.sh`가
+`COLCON_DEFAULTS_FILE`로 가리키므로 `colcon`을 직접 쳐도 래퍼와 같은 옵션이 걸린다.
+
+린터 설정은 TY-4, CI는 TY-5에서 붙인다.
 
 ## 로드맵
 
