@@ -43,7 +43,8 @@
       "Bash(gh pr checks:*)",
       "Bash(gh run list:*)",
       "Bash(gh run view:*)",
-      "Bash(nvidia-smi:*)"
+      "Bash(nvidia-smi:*)",
+      "Bash(gh pr ready:*)"
     ],
     "ask": [
       "Bash(gh pr merge:*)",
@@ -54,6 +55,19 @@
       "Bash(gh api:*)",
       "Bash(gh release:*)",
       "Bash(git tag:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.py\""
+          }
+        ]
+      }
     ]
   }
 }

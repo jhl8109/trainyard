@@ -35,16 +35,17 @@ python3 scripts/ty.py label TY-14 needs/decision
 
 ```bash
 bash scripts/worktree.sh ls                            # 다른 세션이 뭘 잡고 있는지 먼저 본다
-bash scripts/worktree.sh add TY-14 sim-bridge-node     # main에서
-bash scripts/worktree.sh add TY-15 camera --on TY-14   # 머지 안 된 TY-14 위에 쌓기
+bash scripts/worktree.sh add TY-14 sim-bridge-node     # 언제나 main에서
+bash scripts/worktree.sh prune                         # 머지된 워크트리 정리 (-y: 커밋 0개인 것까지)
 ```
 
-- 브랜치는 Linear가 주는 이름(`jhl81094/ty-<번호>-<slug>`)을 쓴다 — 그래야 PR이 티켓에 자동 연결된다
+- **브랜치는 전부 `main`에서 딴다.** `ty.py next`가 epic마다 아직 안 끝난 가장 낮은 번호 하나만 내보내므로, 큐에 나온 티켓은 선행 티켓이 이미 `Done`이다. 쌓을 일이 없으니 리베이스도 없다. `--on`은 사람이 직접 지시했을 때만 쓰는 예외 탈출구고 깊이 1을 넘기지 않는다
+- 브랜치 이름은 `<사용자>/ty-<번호>-<slug>` 꼴이면 된다. 티켓 연결은 브랜치 이름이 아니라 **PR 본문의 `Fixes TY-<번호>`**가 한다
 - **여러 세션이 동시에 돈다.** 워크트리를 만들기 전에 `worktree.sh ls`로 같은 티켓을 잡고 있는지 확인한다(스크립트가 중복이면 막는다). 커밋할 때 `git add -A`를 쓰지 않는다 — 다른 세션이 만든 파일이 섞인다
 - 커밋은 Conventional Commits, 본문에 **왜 이 방식인지** 한두 줄
 - PR 본문은 `.github/pull_request_template.md`를 채운다. `Fixes TY-<번호>` 필수
 - `main` 직접 push 금지(ruleset). squash merge만
-- **머지는 사람이 한다.** PR을 올리고 `In Review`로 바꾼 뒤 세션을 끝낸다
+- **머지는 사람이 한다.** PR을 올리고 `In Review`로 바꾼 뒤 세션을 끝낸다. 머지되면 Linear가 티켓을 `Done`으로 바꾸고, 그때 같은 epic의 다음 티켓이 큐에 열린다 — **큐가 비면 할 일이 없는 게 아니라 머지 대기다**
 
 ## 명령
 
@@ -64,7 +65,9 @@ bash scripts/verify_env.sh             # 환경 검증 (재부팅 후 · 의존�
 
 ## 묻지 말고 해도 되는 것
 
-구현 · 테스트 작성 · 리팩터 · 파일 생성 · 커밋 · 브랜치 push · PR 생성 · Linear 상태·코멘트 갱신 · 측정 실행 · 워크트리 생성.
+구현 · 테스트 작성 · 리팩터 · 파일 생성 · 커밋 · 브랜치 push · PR 생성 · Linear 상태·코멘트 갱신 · 측정 실행 · 워크트리 생성 · 머지된 워크트리 정리(`prune`).
+
+`git add -A` · `git commit -a` · `git push --force` · `main` 직접 push는 `.claude/hooks/guard.py`가 차단한다. 산문으로 부탁하지 않고 훅으로 막는 이유는 여러 세션이 같은 레포에서 동시에 돌기 때문이다.
 
 ## 반드시 사람에게 넘기는 것
 

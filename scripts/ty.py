@@ -25,7 +25,10 @@ API = "https://api.linear.app/graphql"
 ENV_FILE = Path.home() / ".config/trainyard/linear.env"
 # 큐에서 제외: 사람 판단이 필요한 것들
 BLOCKING_LABELS = {"type/spike", "needs/decision"}
-ACTIONABLE_STATES = {"Todo", "Backlog"}
+# 상태는 이름이 아니라 Linear 상태 타입으로 판정한다 (팀이 이름을 바꿔도 안 깨진다)
+DONE_TYPES = {"completed", "canceled", "duplicate"}
+STARTED_TYPES = {"started"}        # In Progress · In Review = 누군가 잡고 있다
+ACTIONABLE_TYPES = {"backlog", "unstarted"}
 
 
 def api_key() -> str:
@@ -116,30 +119,74 @@ def cmd_show(args) -> None:
                 print(f"  {line}")
 
 
+def issue_num(issue: dict) -> int:
+    return int(issue["identifier"].split("-")[1])
+
+
+def sort_key(issue: dict) -> tuple:
+    return (release_order(issue["project"]["name"] if issue["project"] else None), issue_num(issue))
+
+
 def cmd_next(args) -> None:
+    """큐 = epic마다 '아직 안 끝난 가장 낮은 번호' 하나.
+
+    Linear에 의존 관계가 입력돼 있지 않으므로 epic 하위 번호 순을 의존 순서로 쓴다.
+    앞 티켓이 Done이 되기 전에는 다음 티켓이 큐에 나타나지 않는다 — 그래서
+    브랜치를 쌓을 일이 없고 모든 워크트리가 main에서 갈라진다.
+    """
     issues = gql(
         "query($t:String!){ team(id:$t){ issues(first:250){ nodes { " + ISSUE_FIELDS + " } } } }",
         {"t": team_id()},
     )["team"]["issues"]["nodes"]
-    queue, blocked = [], []
+
+    groups: dict[str, list] = {}
     for i in issues:
-        if i["state"]["name"] not in ACTIONABLE_STATES:
-            continue
         if i["children"]["nodes"]:  # epic은 직접 작업하지 않는다
             continue
-        names = {n["name"] for n in i["labels"]["nodes"]}
-        (blocked if names & BLOCKING_LABELS else queue).append(i)
-    keyed = sorted(queue, key=lambda i: (release_order(i["project"]["name"] if i["project"] else None),
-                                         int(i["identifier"].split("-")[1])))
-    print("작업 가능")
-    for i in keyed[: args.count]:
+        # 부모 없는 티켓은 그 자체로 하나의 그룹이다
+        groups.setdefault(i["parent"]["identifier"] if i["parent"] else i["identifier"], []).append(i)
+
+    queue, waiting, blocked, hidden = [], [], [], []
+    for members in groups.values():
+        members.sort(key=issue_num)
+        head = next((m for m in members if m["state"]["type"] not in DONE_TYPES), None)
+        if head is None:
+            continue  # epic 완료
+        labels = {n["name"] for n in head["labels"]["nodes"]}
+        if labels & BLOCKING_LABELS:
+            blocked.append(head)
+        elif head["state"]["type"] in STARTED_TYPES:
+            waiting.append(head)
+        elif head["state"]["type"] in ACTIONABLE_TYPES:
+            queue.append(head)
+        hidden += [
+            m for m in members
+            if m is not head
+            and m["state"]["type"] not in DONE_TYPES
+            and {n["name"] for n in m["labels"]["nodes"]} & BLOCKING_LABELS
+        ]
+
+    print("작업 가능 (epic당 1개 · 전부 main에서 딴다)")
+    if not queue:
+        print("  (없음 — 아래 '진행 중'을 머지하면 다음 티켓이 열린다)")
+    for i in sorted(queue, key=sort_key)[: args.count]:
         proj = i["project"]["name"] if i["project"] else "-"
         print(f"  {i['identifier']:8} [{proj[:24]:26}] {i['title']}")
+
+    if waiting:
+        print("\n진행 중 — 이게 Done이 돼야 같은 epic의 다음 티켓이 열린다")
+        for i in sorted(waiting, key=sort_key):
+            parent = i["parent"]["identifier"] if i["parent"] else "-"
+            print(f"  {i['identifier']:8} [{i['state']['name']:11}] {parent:7} {i['title']}")
+
     if blocked:
-        print("\n사람 판단 필요 (큐에서 제외)")
-        for i in sorted(blocked, key=lambda i: int(i["identifier"].split("-")[1])):
+        print("\n사람 판단 필요 — epic을 막고 있다")
+        for i in sorted(blocked, key=sort_key):
             names = ", ".join(sorted({n["name"] for n in i["labels"]["nodes"]} & BLOCKING_LABELS))
             print(f"  {i['identifier']:8} [{names:16}] {i['title']}")
+
+    if hidden:
+        print(f"\n(뒤쪽에 spike·needs/decision {len(hidden)}개 — 해당 epic 차례가 오면 나타난다)")
 
 
 def cmd_state(args) -> None:

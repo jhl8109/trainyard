@@ -22,13 +22,13 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
 
 2. **중단 조건 확인** — `type/spike` 또는 `needs/decision` 라벨이 붙어 있으면 **구현하지 않는다.** 선택지와 근거를 정리해 사용자에게 제시하고 끝낸다. 설계 숫자를 바꿔야 하는 티켓도 같다.
 
-3. **워크트리**
+3. **워크트리** — base는 **항상 main**이다.
    ```bash
    scripts/worktree.sh add TY-14 sim-bridge-node
-   # 선행 PR이 아직 머지되지 않았고 그 위에 올려야 하면:
-   scripts/worktree.sh add TY-14 sim-bridge-node --on TY-9
    ```
-   `gh pr list --state open`으로 선행 티켓 PR이 떠 있는지 먼저 확인한다. base가 main이 아니면 PR 본문에 `#N 머지 후 리베이스 필요`를 적는다.
+   선행 티켓을 신경 쓸 필요가 없다. `ty.py next`가 epic마다 아직 안 끝난 가장 낮은 번호 하나만 내보내므로, 큐에 나온 티켓은 이미 선행 티켓이 `Done`이라는 뜻이다. 브랜치를 쌓지 않으니 리베이스도 없다.
+
+   `--on`은 예외 탈출구다. 큐를 건너뛰고 사람이 직접 지시했고 선행 PR이 아직 열려 있을 때만 쓴다. 그 경우 PR 본문에 `#N 머지 후 리베이스 필요`를 적고, 깊이는 1을 넘기지 않는다.
 
    생성된 워크트리로 이동해서 작업한다. `source /opt/ros/jazzy/setup.bash`를 먼저 한다.
 
@@ -55,7 +55,7 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
    python3 scripts/ty.py comment TY-14 "결정 · 수치 · 다음 티켓이 알아야 할 것 + PR 링크"
    python3 scripts/ty.py state TY-14 "In Review"
    ```
-   다른 티켓의 전제를 바꿨다면 그 티켓에도 코멘트를 남긴다.
+   다른 티켓의 전제를 바꿨다면 그 티켓에도 코멘트를 남긴다. 워크트리는 **지우지 않는다** — PR이 머지된 뒤 `worktree.sh prune`이 걷어간다.
 
 9. **3줄 요약** — 무엇을 했나 / 수치 / 사용자에게 필요한 결정(머지 포함).
 
@@ -63,25 +63,33 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
 
 드라이버는 **구현하지 않는다.** 컨텍스트를 작게 유지하고 티켓마다 에이전트를 띄운다.
 
-1. ```bash
+1. **청소하고 큐를 읽는다.**
+   ```bash
+   bash scripts/worktree.sh prune          # 머지된 워크트리를 걷어낸다
    python3 scripts/ty.py next -n 10
-   gh pr list --state open --json number,headRefName,title
+   gh pr list --state open --json number,title,headRefName   # 사용자가 머지할 것들
    ```
+   `next`의 "진행 중" 항목은 **사람이 머지해야 열리는 것들**이다. 큐가 비어 있으면 더 할 일이 없는 게 아니라 머지 대기다 — 그 목록을 사용자에게 보여주고 멈춘다.
 
-2. 큐 맨 위 티켓 하나에 대해 `Agent`를 띄운다(`subagent_type: "general-purpose"`). 프롬프트에 넣을 것:
+2. 큐에 나온 티켓들에 대해 `Agent`를 띄운다(`subagent_type: "general-purpose"`). 큐의 티켓은 서로 다른 epic에 속하고 전부 main에서 갈라지므로 **동시에 띄워도 된다.** 프롬프트에 넣을 것:
    - 티켓 번호와 "`.claude/skills/ticket/SKILL.md`의 단일 모드 1~8단계를 따르라"
    - 저장소 경로와 `CLAUDE.md`를 먼저 읽으라는 지시
-   - 선행 PR이 열려 있으면 base로 쓸 브랜치
    - 돌려줄 보고 형식: `티켓 / PR 링크 / 수치 / 막힌 점(있으면)` 4줄
 
-3. 에이전트 보고를 받으면 다음 티켓으로 넘어간다. **다음 중 하나면 멈추고 사용자에게 보고한다.**
+3. 에이전트 보고를 받으면 큐를 다시 읽는다. **다음 중 하나면 멈추고 사용자에게 보고한다.**
+   - 큐가 비었다 — 머지 대기다. 머지할 PR 목록을 보여준다
    - 큐에 `type/spike` · `needs/decision`만 남았다
    - 에이전트가 막혔다고 보고했다 (그 티켓에 `needs/decision` 라벨이 붙어 있는지 확인)
    - 에이전트가 실패했거나 CI가 깨졌다
    - 사용자가 지정한 티켓 수를 소화했다 (기본 3개)
-   - 머지되지 않은 PR이 5개를 넘었다 — 더 쌓으면 리베이스 비용이 커진다
 
 4. 마지막에 표로 보고한다: 티켓 / PR / 수치 / 상태. 그리고 사용자가 할 일(머지할 PR 목록, 필요한 결정)을 적는다.
+
+### 루프를 누가 돌리나
+
+드라이버는 사용자가 띄운 세션이다. 데몬은 없다. 머지는 사람이 하므로 **큐는 머지에서 마른다** — 이건 설계된 동작이고, 브랜치를 쌓아서 가리지 않는다.
+
+머지는 어디서 하든 상관없다(GitHub 웹·모바일). 드라이버는 Linear 상태만 보고, PR이 머지되면 티켓이 `Done`으로 자동 전이되면서 같은 epic의 다음 티켓이 큐에 나타난다. 머지 후 재기동은 사용자가 `/ticket next`를 다시 치거나, `/loop 20m /ticket next`로 맡긴다.
 
 ## 하지 않는 것
 
