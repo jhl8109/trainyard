@@ -2,6 +2,7 @@
 
 서브패키지 경계는 Linear epic과 1:1로 맞춘다:
 
+- :mod:`trainyard.sim` — E2 MuJoCo 씬 (ROS 없이 로드되는 쪽)
 - :mod:`trainyard.data` — E5 데이터 파이프라인
 - :mod:`trainyard.policies` — 정책 구현 (BC · ACT · residual)
 - :mod:`trainyard.training` — 학습 러너

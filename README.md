@@ -61,7 +61,7 @@ trainyard/
 │   ├── ty_policy/        정책 추론 노드
 │   └── ty_bringup/       launch 파일
 ├── platform/           ROS 바깥 — 데이터 · 학습 · 평가 · 잡 큐 (`trainyard` 패키지)
-│   ├── src/trainyard/    data · policies · training · evaluation · api
+│   ├── src/trainyard/    sim · data · policies · training · evaluation · api
 │   └── tests/
 ├── config/             양쪽이 공유하는 설정 (태스크 정의)
 ├── scripts/            환경 검증 등 개발 스크립트
@@ -78,6 +78,7 @@ trainyard/
 | Teleop 입력 | `ros2_ws/src/ty_teleop` |
 | rosbag2 recorder | `ros2_ws/src/ty_recorder` |
 | Policy 추론 노드 | `ros2_ws/src/ty_policy` |
+| MuJoCo 씬 (MJCF · 도달성 측정) | `platform/src/trainyard/sim` |
 | Data Pipeline · Model Registry · Job Queue · 평가 DB | `platform/src/trainyard/` |
 | IL 학습 · RL 파인튜닝 | `platform/src/trainyard/{training,policies}` |
 
