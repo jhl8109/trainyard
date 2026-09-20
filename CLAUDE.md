@@ -49,11 +49,18 @@ bash scripts/worktree.sh add TY-15 camera --on TY-14   # 머지 안 된 TY-14 �
 ## 명령
 
 ```bash
-source /opt/ros/jazzy/setup.bash      # ros2 · rclpy 쓰기 전 항상
-.venv/bin/python                      # torch · mujoco · lerobot (워크트리에서는 심볼릭 링크)
-bash scripts/verify_env.sh            # 환경 검증 (재부팅 후 · 의존성 바꾼 뒤)
-colcon build --symlink-install        # ros2_ws
+pytest                                 # 플랫폼 (ROS 불필요, testpaths=platform/tests)
+
+source /opt/ros/jazzy/setup.bash       # ros2 · rclpy 쓰기 전 항상
+cd ros2_ws && colcon build && colcon test
+
+.venv/bin/python                       # torch · mujoco · lerobot (워크트리에서는 심볼릭 링크)
+bash scripts/verify_env.sh             # 환경 검증 (재부팅 후 · 의존성 바꾼 뒤)
 ```
+
+코드를 어디에 둘지는 README `레포 구조`를 따른다. 기준은 하나다 — **ROS 2를 source 해야 돌아가는 코드만 `ros2_ws/`에 둔다.** 학습 · 평가 · API는 로봇 없이 돌아야 하므로 `platform/src/trainyard/`에 남는다.
+
+의존성을 추가할 때는 레포 루트 `requirements.txt`(고정 버전의 단일 출처)에 넣는다. `platform/pyproject.toml`에는 런타임 의존성을 적지 않는다.
 
 ## 묻지 말고 해도 되는 것
 
