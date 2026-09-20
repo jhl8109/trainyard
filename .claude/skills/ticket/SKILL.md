@@ -1,6 +1,6 @@
 ---
 name: ticket
-description: Work a TrainYard Linear ticket end to end — worktree, branch, implementation, verification, PR, Linear update. Use when the user types /ticket TY-14 (one ticket in this session) or /ticket next (drive the queue, one fresh agent per ticket). Also use when asked to pick up the next ticket, continue the backlog, or work through the queue.
+description: Run one TrainYard Linear ticket (team TY) end to end — read the ticket, create its worktree and branch, implement, measure, open the PR, cross-verify, update Linear. Use whenever the user types /ticket TY-14 or /ticket next, names a TY ticket to work on ("TY-19 해줘", "work on TY-33"), or asks to pick up the next ticket, 다음 티켓, 백로그/큐를 진행, or keep the queue moving. Prefer this skill over improvising your own branch/PR/Linear flow in this repo — it carries the worktree layout, the model split (structure=Opus / implementation=Sonnet), the human gates, and the auto-merge conditions.
 ---
 
 # 티켓 실행
@@ -24,7 +24,7 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
 
 3. **워크트리** — base는 **항상 main**이다.
    ```bash
-   scripts/worktree.sh add TY-14 sim-bridge-node
+   bash scripts/worktree.sh add TY-14 sim-bridge-node
    ```
    선행 티켓을 신경 쓸 필요가 없다. `ty.py next`가 epic마다 아직 안 끝난 가장 낮은 번호 하나만 내보내므로, 큐에 나온 티켓은 이미 선행 티켓이 `Done`이라는 뜻이다. 브랜치를 쌓지 않으니 리베이스도 없다.
 
@@ -37,7 +37,7 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
 5. **구현** — 티켓의 완료 조건을 만족시키는 최소 변경. 티켓 범위를 넘는 것을 발견하면 구현하지 말고 `ty.py sub`로 하위 이슈를 만들어 남긴다.
 
 6. **자체 확인** — 티켓 성격에 맞게 실행하고 **숫자를 남긴다.** (8단계의 교차 검증이 이 수치를 본다.)
-   - 코드: `pytest`, `colcon build --symlink-install`, 관련 노드 실행
+   - 코드: `pytest`(플랫폼) / `cd ros2_ws && colcon build && colcon test`(ROS), 관련 노드 실행
    - 환경·의존성 변경: `bash scripts/verify_env.sh`
    - 주기·지연이 관련되면 실측(예: 루프 지터 p99, 퍼블리시 Hz)
    측정값이 필요한 티켓인데 측정하지 않았다면 완료가 아니다.
@@ -52,7 +52,11 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
 
 8. **교차 검증 (Sonnet 1회)** — 구현한 세션이 스스로 통과 판정을 내리지 않는다. **Sonnet 에이전트 하나**를 띄워 PR을 보게 한다(구조 티켓이어도 검증은 Sonnet이다).
 
-   검증자에게 주는 것: PR 번호, 티켓 번호, "완료 조건은 `ty.py show`로 읽어라", 아래 판정 규칙.
+   검증자에게 주는 프롬프트(그대로 써도 된다):
+
+   > `<repo>`에서 PR #N을 검증한다. 티켓은 TY-14다. `python3 scripts/ty.py show TY-14`로 완료 조건을, `gh pr diff N`으로 변경을 읽는다. 레포 전체를 읽지 말고 이 둘만 본다.
+   > 차단은 `unmet` · `contract` · `bug` · `unverified` 네 가지뿐이다. 네이밍 · 스타일 · 리팩터 제안 · 확장성은 차단하지 말고 한 줄 코멘트로만 남긴다.
+   > `PASS` 또는 `BLOCK <코드> <파일:줄> <근거> <무엇을 바꿔야 하나>` 형식으로만 답한다.
 
    **차단 사유는 네 개뿐이다.** 여기 없는 것은 차단하지 않는다.
    | 코드 | 차단 사유 |
@@ -116,7 +120,7 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
    **모델은 `ty.py next`가 티켓마다 찍어준 값을 그대로 `model` 인자에 넣는다** — `opus`(구조 티켓) 또는 `sonnet`(구현 티켓). 드라이버가 임의로 바꾸지 않는다. 판단 기준은 `CLAUDE.md` "어느 모델로 도는가"에 있고, 라벨이 틀렸다고 보이면 고치지 말고 보고에 적는다.
 
    프롬프트에 넣을 것:
-   - 티켓 번호와 "`.claude/skills/ticket/SKILL.md`의 단일 모드 1~8단계를 따르라"
+   - 티켓 번호와 "`.claude/skills/ticket/SKILL.md`의 단일 모드 **1~7단계와 10단계**를 따르라. 8단계(교차 검증)와 9단계(자동 머지)는 드라이버가 한다"
    - 저장소 경로와 `CLAUDE.md`를 먼저 읽으라는 지시
    - 돌려줄 보고 형식: `티켓 / 모델 / PR 링크 / 수치 / 막힌 점(있으면)` 5줄
    - 구현 후 검증 에이전트의 지적을 받을 수 있으니 세션을 닫지 말고 대기하라는 지시
@@ -140,7 +144,7 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
 
 ## 하지 않는 것
 
-- PR 머지 (사람이 한다). 8단계의 네 조건을 전부 만족할 때의 `--auto`만 예외이고, 인자 없는 `gh pr merge`는 쓰지 않는다
+- PR 머지 (사람이 한다). 9단계의 네 조건을 전부 만족할 때의 `--auto`만 예외이고, 인자 없는 `gh pr merge`는 쓰지 않는다
 - 막힌 티켓을 더 큰 모델로 재시도 — 약속을 바꿔야 해서 막힌 것이면 사람 게이트다
 - `model/opus` 라벨 임의 변경 — 틀려 보이면 보고에만 적는다
 - `main` 직접 push, force push
