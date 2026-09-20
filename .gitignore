@@ -17,3 +17,6 @@ ros2_ws/log/
 
 # 비공개 메모
 docs/internal/
+
+# mkdocs 빌드 산출물
+site/
