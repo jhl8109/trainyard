@@ -1,0 +1,82 @@
+# TrainYard 문서 사이트 — docs/ 의 마크다운을 그대로 빌드해 GitHub Pages로 배포한다.
+# 문서는 한 벌만 쓴다. 사이트 전용 사본을 만들지 않는다 (TY-136).
+
+site_name: TrainYard
+site_description: 로봇팔 모방학습 시스템 — 텔레오퍼레이션 · 데이터 파이프라인 · 학습 · 평가 · 실시간 추론
+site_url: https://jhl8109.github.io/trainyard/
+repo_url: https://github.com/jhl8109/trainyard
+repo_name: jhl8109/trainyard
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+
+# 랜딩(index.md)은 루트 README.md에서 빌드 시 생성한다. 파일로 두면 README와 갈라진다.
+hooks:
+  - scripts/mkdocs_hooks.py
+
+# docs/internal/ 은 비공개(.gitignore). 로컬에 파일이 있어도 사이트에는 넣지 않는다.
+exclude_docs: |
+  internal/
+
+nav:
+  - 홈: index.md
+  - 개발 환경 셋업: SETUP.md
+  - 태스크 정의: task-pick-place.md
+  - 릴리즈:
+      - 개요: releases/index.md
+      - v0 · Sim Skeleton: releases/v0.md
+      - v1 · Data & Eval Platform: releases/v1.md
+      - v2 · Realtime Inference: releases/v2.md
+      - v3 · Real Robot: releases/v3.md
+      - v4 · RL Fine-tuning: releases/v4.md
+      - v5 · VLA & Multi-step: releases/v5.md
+
+theme:
+  name: material
+  language: ko
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: 다크 모드로
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: 라이트 모드로
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  # 한글 제목의 앵커를 본문 그대로 쓴다. 기본 slugify는 #_5 같은 번호를 만들어서
+  # 제목이 하나 늘면 링크가 조용히 다른 절을 가리킨다. GitHub 앵커와도 이쪽이 같다.
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify {kwds: {case: lower}}
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+# --strict 와 함께 쓰면 깨진 링크 · nav 누락이 빌드 실패가 된다 (PR에서 걸러내는 장치).
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn

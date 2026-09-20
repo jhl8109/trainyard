@@ -225,4 +225,6 @@ main (트렁크, 항상 녹색)
 
 ---
 
+문서 사이트: <https://jhl8109.github.io/trainyard/>
+
 개발 환경 셋업: [`docs/SETUP.md`](docs/SETUP.md)
