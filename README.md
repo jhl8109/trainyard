@@ -120,6 +120,29 @@ DIY 키트 대신 조립완성품을 쓴다. 3D 프린팅과 프레임 조립은
 - 비교 축: **BC / ACT / ACT+RL** × **시뮬 / 실물**. 같은 조건표로만 비교한다.
 - 실물(v3): 같은 조건표로 수행하고 결과는 UI에서 라벨링, 시뮬 결과와 나란히 비교
 
+## 개발 워크플로
+
+트렁크 기반. `develop` 브랜치는 쓰지 않는다 — 혼자 작업하고 배포 대상이 없어서 머지 단계만 늘어난다. 같이 작업하는 사람이 생기거나 릴리즈 전 QA 게이트가 실제로 필요해지면 그때 재검토한다.
+
+```
+main (트렁크, 항상 녹색)
+ ├── jeho/ty-8-task-definition   → PR → squash merge → main
+ ├── jeho/ty-9-ty-msgs           → PR → squash merge → main
+ └── ...
+릴리즈 프로젝트 완료 → annotated 태그(v0, v1 …) + GitHub Release
+```
+
+| 단계 | 규칙 |
+|---|---|
+| 티켓 | [Linear 팀 TY](https://linear.app/jhl81094/team/TY)에서 관리. 릴리즈 = 프로젝트, epic = 부모 이슈, 스토리 = 하위 이슈 |
+| 브랜치 | 티켓 하나 = 브랜치 하나. 이름은 Linear가 주는 `jeho/ty-<번호>-<slug>` 그대로 |
+| 커밋 | Conventional Commits — `feat(teleop):` · `fix(sim):` · `docs:` · `chore:` · `test:` |
+| PR | 본문에 `Fixes TY-<번호>`. 템플릿의 완료 조건 · 수치 · 확인 방법을 채운다 |
+| 머지 | squash merge만. main은 선형 히스토리를 유지하고 머지된 브랜치는 삭제 |
+| 릴리즈 | 태그 + Release 노트에 데모 영상 · 평가 조건표 수치 · 재현 절차를 첨부 |
+
+릴리즈 노트가 이 프로젝트의 배포 산출물이다. "이 태그에서 이 명령을 실행하면 이 수치가 나온다"까지 적어, 각 릴리즈가 그 자체로 완결됐음을 확인할 수 있게 한다(설계 원칙 6).
+
 ## 검토했지만 채택하지 않은 기술
 
 ### Jev / TypeSafe System One 모델 (2026-09 검토)
