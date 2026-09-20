@@ -36,7 +36,7 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
 
 5. **구현** — 티켓의 완료 조건을 만족시키는 최소 변경. 티켓 범위를 넘는 것을 발견하면 구현하지 말고 `ty.py sub`로 하위 이슈를 만들어 남긴다.
 
-6. **검증** — 티켓 성격에 맞게 실행하고 **숫자를 남긴다.**
+6. **자체 확인** — 티켓 성격에 맞게 실행하고 **숫자를 남긴다.** (8단계의 교차 검증이 이 수치를 본다.)
    - 코드: `pytest`, `colcon build --symlink-install`, 관련 노드 실행
    - 환경·의존성 변경: `bash scripts/verify_env.sh`
    - 주기·지연이 관련되면 실측(예: 루프 지터 p99, 퍼블리시 Hz)
@@ -50,13 +50,35 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
    gh pr create --base <base> --title "..." --body "..."   # 템플릿 채우기, Fixes TY-14
    ```
 
-8. **자동 머지 판단** — 네 조건을 **전부** 만족할 때만 `gh pr merge --auto --squash`를 건다. 하나라도 어긋나면 걸지 않고 사람에게 남긴다.
+8. **교차 검증 (Sonnet 1회)** — 구현한 세션이 스스로 통과 판정을 내리지 않는다. **Sonnet 에이전트 하나**를 띄워 PR을 보게 한다(구조 티켓이어도 검증은 Sonnet이다).
+
+   검증자에게 주는 것: PR 번호, 티켓 번호, "완료 조건은 `ty.py show`로 읽어라", 아래 판정 규칙.
+
+   **차단 사유는 네 개뿐이다.** 여기 없는 것은 차단하지 않는다.
+   | 코드 | 차단 사유 |
+   |---|---|
+   | `unmet` | 티켓 완료 조건 중 충족되지 않은 항목이 있는데 이유도 안 적혀 있다 |
+   | `contract` | 계약을 어겼다 — 토픽·주기·단위 규약, 메시지 정의, 성공 판정 시그니처, 보호 경로를 티켓 범위 밖에서 변경 |
+   | `bug` | 재현 경로를 말할 수 있는 결함 — 예외·경합·자원 누수·off-by-one·잘못된 단위. "그럴 수도 있다"는 차단이 아니다 |
+   | `unverified` | 측정이 필요한 티켓인데 수치가 없거나, 적어둔 확인 명령이 실제로 돌지 않는다 |
+
+   **차단하지 않는 것**(PR 코멘트 한 줄로만 남긴다): 네이밍 · 스타일 · 파일 배치 취향, 추가 테스트 아이디어, 리팩터 제안, 미세 성능, 미래 확장성. 설계 자체를 다시 논하지 않는다 — 계약 변경은 사람 게이트다.
+
+   판정 형식: `PASS` 또는 `BLOCK <코드> <파일:줄> <한 줄 근거> <무엇을 바꿔야 하나>`.
+
+   - `PASS` → 9단계로 간다.
+   - `BLOCK` → **재작업 1회.** 지적된 것만 고치고(범위를 넓히지 않는다) push한 뒤, 같은 검증자에게 `SendMessage`로 다시 보낸다.
+   - 재검증도 `BLOCK` → 멈춘다. `needs/decision` 라벨 + 지적 내용을 티켓에 코멘트하고 사용자에게 넘긴다. 세 번째 시도는 하지 않는다.
+
+   검증이 비싸지 않게 유지한다 — 검증자는 PR diff와 완료 조건만 본다. 레포 전체를 읽히지 않는다.
+
+9. **자동 머지 판단** — 네 조건을 **전부** 만족할 때만 `gh pr merge --auto --squash`를 건다. 하나라도 어긋나면 걸지 않고 사람에게 남긴다.
 
    | # | 조건 | 확인 |
    |---|---|---|
    | 1 | CI 필수 검사가 ruleset에 걸려 있다 | `gh api repos/{owner}/{repo}/rulesets --jq '.[].id'` → 각 ruleset에서 `required_status_checks` 존재 |
    | 2 | 구현 티켓이다 (`model/opus` 라벨 없음) | `python3 scripts/ty.py show TY-14 \| head -1` → `→ sonnet` |
-   | 3 | 보호 경로를 건드리지 않았다 | `gh pr diff <N> --name-only` |
+   | 3 | 교차 검증이 `PASS`다 (8단계) · 보호 경로를 건드리지 않았다 | `gh pr diff <N> --name-only` |
    | 4 | 평가 수치를 바꾸지 않는다 | 조건표 · 성공 판정 · 보상에 영향이 없다 |
 
    보호 경로: `ros2_ws/src/ty_msgs/**` · `config/**` · `docs/interfaces.md` · `docs/task-pick-place.md` · `docs/design.md` · `platform/src/trainyard/evaluation/**` · DB 마이그레이션. 여기에 걸리면 다른 티켓이 읽는 약속을 바꾼 것이므로 사람이 본다.
@@ -68,14 +90,14 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
 
    **조건 1이 아직 거짓이다** (CI 없음 — TY-5, 활성화는 TY-138). 그러니 지금은 **어떤 PR에도 자동 머지를 걸지 않는다.** `--auto`는 필수 검사가 없으면 즉시 머지로 동작해서, 검증 없이 main에 들어간다. 조건 1이 참이 되면 이 문단을 지운다.
 
-9. **Linear 마감**
+10. **Linear 마감**
    ```bash
    python3 scripts/ty.py comment TY-14 "결정 · 수치 · 다음 티켓이 알아야 할 것 + PR 링크"
    python3 scripts/ty.py state TY-14 "In Review"
    ```
    다른 티켓의 전제를 바꿨다면 그 티켓에도 코멘트를 남긴다. 워크트리는 **지우지 않는다** — PR이 머지된 뒤 `worktree.sh prune`이 걷어간다.
 
-10. **3줄 요약** — 무엇을 했나 / 수치 / 사용자에게 필요한 결정(머지 포함).
+11. **3줄 요약** — 무엇을 했나 / 수치 / 사용자에게 필요한 결정(머지 포함).
 
 ## 큐 모드 — `/ticket next`
 
@@ -97,15 +119,18 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
    - 티켓 번호와 "`.claude/skills/ticket/SKILL.md`의 단일 모드 1~8단계를 따르라"
    - 저장소 경로와 `CLAUDE.md`를 먼저 읽으라는 지시
    - 돌려줄 보고 형식: `티켓 / 모델 / PR 링크 / 수치 / 막힌 점(있으면)` 5줄
+   - 구현 후 검증 에이전트의 지적을 받을 수 있으니 세션을 닫지 말고 대기하라는 지시
 
-3. 에이전트 보고를 받으면 큐를 다시 읽는다. **다음 중 하나면 멈추고 사용자에게 보고한다.**
+3. 구현 에이전트가 PR을 올리면 **그 PR에 대해 Sonnet 검증 에이전트를 띄운다**(8단계 규칙). `BLOCK`이면 `SendMessage`로 구현 에이전트에게 지적을 전달해 재작업 1회를 시키고, 같은 검증자에게 다시 보낸다. 두 번째도 `BLOCK`이면 그 티켓은 `needs/decision`으로 넘기고 다음 티켓으로 간다.
+
+4. 에이전트 보고를 받으면 큐를 다시 읽는다. **다음 중 하나면 멈추고 사용자에게 보고한다.**
    - 큐가 비었다 — 머지 대기다. 머지할 PR 목록을 보여준다
    - 큐에 `type/spike` · `needs/decision`만 남았다
    - 에이전트가 막혔다고 보고했다 (그 티켓에 `needs/decision` 라벨이 붙어 있는지 확인). **Opus로 다시 돌리지 않는다** — 약속을 바꿔야 해서 막힌 것이면 사람 게이트다
    - 에이전트가 실패했거나 CI가 깨졌다
    - 사용자가 지정한 티켓 수를 소화했다 (기본 3개)
 
-4. 마지막에 표로 보고한다: 티켓 / PR / 수치 / 상태. 그리고 사용자가 할 일(머지할 PR 목록, 필요한 결정)을 적는다.
+5. 마지막에 표로 보고한다: 티켓 / 모델 / PR / 수치 / 검증(PASS·재작업·BLOCK) / 상태. 그리고 사용자가 할 일(머지할 PR 목록, 필요한 결정)을 적는다.
 
 ### 루프를 누가 돌리나
 
