@@ -16,7 +16,10 @@ setup(
     maintainer_email="jhl81094@gmail.com",
     description="MuJoCo 시뮬레이션 Hardware Interface 노드 — joint_states 퍼블리시 · joint_command 구독 · 카메라 렌더 · 씬 리셋",
     license="Apache-2.0",
-    tests_require=["pytest"],
+    # colcon 은 이 test 의존성을 보고 pytest 로 테스트할지 정한다.
+    # 없으면 조용히 `python -m unittest` 로 내려가 pytest 테스트를 수집하지 못한다.
+    # (deprecated 된 tests_require 대신 extras_require — setuptools 78+ 가 경고한다)
+    extras_require={"test": ["pytest"]},
     entry_points={
         "console_scripts": [
             # 노드는 각 티켓에서 추가한다.

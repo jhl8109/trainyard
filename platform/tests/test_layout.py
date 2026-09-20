@@ -4,6 +4,7 @@
 디렉터리 이름이 어긋나거나, ROS 패키지가 매니페스트 없이 추가되는 경우.
 """
 
+import ast
 import importlib
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -61,3 +62,31 @@ def test_ros_package_manifest_matches_directory(pkg):
         assert (pkg / pkg.name / "__init__.py").is_file()
     else:
         assert (pkg / "CMakeLists.txt").is_file()
+
+
+def setup_py_kwargs(pkg: Path) -> dict:
+    """``setup.py``의 ``setup(...)`` 호출 인자를 실행하지 않고 읽는다."""
+    tree = ast.parse((pkg / "setup.py").read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "setup":
+            return {kw.arg: kw.value for kw in node.keywords if kw.arg}
+    raise AssertionError(f"{pkg.name}: setup() 호출을 찾지 못했다")
+
+
+@pytest.mark.parametrize("pkg", ros_packages(), ids=lambda p: p.name)
+def test_python_package_is_tested_with_pytest(pkg):
+    """ament_python 패키지는 pytest test 의존성과 테스트 파일을 최소 하나 갖는다 (TY-3).
+
+    colcon은 setup.py의 test 의존성을 보고 pytest를 고른다. 빠지면 경고 없이
+    ``python -m unittest``로 내려가 ``test/`` 아래 pytest 테스트를 통째로 건너뛴다.
+    수집할 테스트가 하나도 없으면 반대로 pytest가 exit 5로 끝나 패키지가 실패한다.
+    """
+    root = ET.parse(pkg / "package.xml").getroot()
+    if root.findtext("export/build_type") != "ament_python":
+        pytest.skip("ament_cmake 패키지")
+
+    extras = setup_py_kwargs(pkg).get("extras_require")
+    assert extras is not None, f"{pkg.name}: extras_require 없음 — colcon이 pytest를 고르지 못한다"
+    assert "pytest" in ast.literal_eval(extras).get("test", []), f"{pkg.name}: test 의존성에 pytest 없음"
+
+    assert list((pkg / "test").glob("test_*.py")), f"{pkg.name}: test/ 에 테스트가 없다 (pytest exit 5)"

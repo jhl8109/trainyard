@@ -52,12 +52,15 @@ bash scripts/worktree.sh prune                         # 머지된 워크트리 
 ```bash
 pytest                                 # 플랫폼 (ROS 불필요, testpaths=platform/tests)
 
-source /opt/ros/jazzy/setup.bash       # ros2 · rclpy 쓰기 전 항상
-cd ros2_ws && colcon build && colcon test
+source scripts/env.sh                  # ROS 2 + 오버레이 + venv. ros2 · rclpy 쓰기 전 항상
+scripts/build.sh [--test] [--clean] [패키지...]   # colcon 래퍼 (옵션은 ros2_ws/colcon-defaults.yaml)
 
-.venv/bin/python                       # torch · mujoco · lerobot (워크트리에서는 심볼릭 링크)
+$TY_PYTHON                             # = .venv/bin/python — torch · mujoco · lerobot
 bash scripts/verify_env.sh             # 환경 검증 (재부팅 후 · 의존성 바꾼 뒤)
 ```
+
+`.venv/bin`은 일부러 `PATH`에 넣지 않는다(pip cmake 4.x가 apt cmake를 가려 colcon 빌드가 깨진다).
+venv 패키지는 `PYTHONPATH`로만 연결되므로 ROS 노드에서도 `import torch`가 된다.
 
 코드를 어디에 둘지는 README `레포 구조`를 따른다. 기준은 하나다 — **ROS 2를 source 해야 돌아가는 코드만 `ros2_ws/`에 둔다.** 학습 · 평가 · API는 로봇 없이 돌아야 하므로 `platform/src/trainyard/`에 남는다.
 
