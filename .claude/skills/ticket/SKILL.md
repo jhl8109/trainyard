@@ -1,6 +1,6 @@
 ---
 name: ticket
-description: Work a TrainYard Linear ticket end to end — worktree, branch, implementation, verification, PR, Linear update. Use when the user types /ticket TY-14 (one ticket in this session) or /ticket next (drive the queue, one fresh agent per ticket). Also use when asked to pick up the next ticket, continue the backlog, or work through the queue.
+description: Run one TrainYard Linear ticket (team TY) end to end — read the ticket, create its worktree and branch, implement, measure, open the PR, cross-verify, update Linear. Use whenever the user types /ticket TY-14 or /ticket next, names a TY ticket to work on ("TY-19 해줘", "work on TY-33"), or asks to pick up the next ticket, 다음 티켓, 백로그/큐를 진행, or keep the queue moving. Prefer this skill over improvising your own branch/PR/Linear flow in this repo — it carries the worktree layout, the model split (structure=Opus / implementation=Sonnet), the human gates, and the auto-merge conditions.
 ---
 
 # 티켓 실행
@@ -24,7 +24,7 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
 
 3. **워크트리** — base는 **항상 main**이다.
    ```bash
-   scripts/worktree.sh add TY-14 sim-bridge-node
+   bash scripts/worktree.sh add TY-14 sim-bridge-node
    ```
    선행 티켓을 신경 쓸 필요가 없다. `ty.py next`가 epic마다 아직 안 끝난 가장 낮은 번호 하나만 내보내므로, 큐에 나온 티켓은 이미 선행 티켓이 `Done`이라는 뜻이다. 브랜치를 쌓지 않으니 리베이스도 없다.
 
@@ -36,8 +36,8 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
 
 5. **구현** — 티켓의 완료 조건을 만족시키는 최소 변경. 티켓 범위를 넘는 것을 발견하면 구현하지 말고 `ty.py sub`로 하위 이슈를 만들어 남긴다.
 
-6. **검증** — 티켓 성격에 맞게 실행하고 **숫자를 남긴다.**
-   - 코드: `pytest`, `colcon build --symlink-install`, 관련 노드 실행
+6. **자체 확인** — 티켓 성격에 맞게 실행하고 **숫자를 남긴다.** (8단계의 교차 검증이 이 수치를 본다.)
+   - 코드: `pytest`(플랫폼) / `cd ros2_ws && colcon build && colcon test`(ROS), 관련 노드 실행
    - 환경·의존성 변경: `bash scripts/verify_env.sh`
    - 주기·지연이 관련되면 실측(예: 루프 지터 p99, 퍼블리시 Hz)
    측정값이 필요한 티켓인데 측정하지 않았다면 완료가 아니다.
@@ -50,14 +50,58 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
    gh pr create --base <base> --title "..." --body "..."   # 템플릿 채우기, Fixes TY-14
    ```
 
-8. **Linear 마감**
+8. **교차 검증 (Sonnet 1회)** — 구현한 세션이 스스로 통과 판정을 내리지 않는다. **Sonnet 에이전트 하나**를 띄워 PR을 보게 한다(구조 티켓이어도 검증은 Sonnet이다).
+
+   검증자에게 주는 프롬프트(그대로 써도 된다):
+
+   > `<repo>`에서 PR #N을 검증한다. 티켓은 TY-14다. `python3 scripts/ty.py show TY-14`로 완료 조건을, `gh pr diff N`으로 변경을 읽는다. 레포 전체를 읽지 말고 이 둘만 본다.
+   > 차단은 `unmet` · `contract` · `bug` · `unverified` 네 가지뿐이다. 네이밍 · 스타일 · 리팩터 제안 · 확장성은 차단하지 말고 한 줄 코멘트로만 남긴다.
+   > `PASS` 또는 `BLOCK <코드> <파일:줄> <근거> <무엇을 바꿔야 하나>` 형식으로만 답한다.
+
+   **차단 사유는 네 개뿐이다.** 여기 없는 것은 차단하지 않는다.
+   | 코드 | 차단 사유 |
+   |---|---|
+   | `unmet` | 티켓 완료 조건 중 충족되지 않은 항목이 있는데 이유도 안 적혀 있다 |
+   | `contract` | 계약을 어겼다 — 토픽·주기·단위 규약, 메시지 정의, 성공 판정 시그니처, 보호 경로를 티켓 범위 밖에서 변경 |
+   | `bug` | 재현 경로를 말할 수 있는 결함 — 예외·경합·자원 누수·off-by-one·잘못된 단위. "그럴 수도 있다"는 차단이 아니다 |
+   | `unverified` | 측정이 필요한 티켓인데 수치가 없거나, 적어둔 확인 명령이 실제로 돌지 않는다 |
+
+   **차단하지 않는 것**(PR 코멘트 한 줄로만 남긴다): 네이밍 · 스타일 · 파일 배치 취향, 추가 테스트 아이디어, 리팩터 제안, 미세 성능, 미래 확장성. 설계 자체를 다시 논하지 않는다 — 계약 변경은 사람 게이트다.
+
+   판정 형식: `PASS` 또는 `BLOCK <코드> <파일:줄> <한 줄 근거> <무엇을 바꿔야 하나>`.
+
+   - `PASS` → 9단계로 간다.
+   - `BLOCK` → **재작업 1회.** 지적된 것만 고치고(범위를 넓히지 않는다) push한 뒤, 같은 검증자에게 `SendMessage`로 다시 보낸다.
+   - 재검증도 `BLOCK` → 멈춘다. `needs/decision` 라벨 + 지적 내용을 티켓에 코멘트하고 사용자에게 넘긴다. 세 번째 시도는 하지 않는다.
+
+   검증이 비싸지 않게 유지한다 — 검증자는 PR diff와 완료 조건만 본다. 레포 전체를 읽히지 않는다.
+
+9. **자동 머지 판단** — 네 조건을 **전부** 만족할 때만 `gh pr merge --auto --squash`를 건다. 하나라도 어긋나면 걸지 않고 사람에게 남긴다.
+
+   | # | 조건 | 확인 |
+   |---|---|---|
+   | 1 | CI 필수 검사가 ruleset에 걸려 있다 | `gh api repos/{owner}/{repo}/rulesets --jq '.[].id'` → 각 ruleset에서 `required_status_checks` 존재 |
+   | 2 | 구현 티켓이다 (`model/opus` 라벨 없음) | `python3 scripts/ty.py show TY-14 \| head -1` → `→ sonnet` |
+   | 3 | 교차 검증이 `PASS`다 (8단계) · 보호 경로를 건드리지 않았다 | `gh pr diff <N> --name-only` |
+   | 4 | 평가 수치를 바꾸지 않는다 | 조건표 · 성공 판정 · 보상에 영향이 없다 |
+
+   보호 경로: `ros2_ws/src/ty_msgs/**` · `config/**` · `docs/interfaces.md` · `docs/task-pick-place.md` · `docs/design.md` · `platform/src/trainyard/evaluation/**` · DB 마이그레이션. 여기에 걸리면 다른 티켓이 읽는 약속을 바꾼 것이므로 사람이 본다.
+
+   ```bash
+   gh pr diff 12 --name-only            # 3번 확인
+   gh pr merge 12 --auto --squash       # 네 조건 모두 만족할 때만
+   ```
+
+   **조건 1이 아직 거짓이다** (CI 없음 — TY-5, 활성화는 TY-138). 그러니 지금은 **어떤 PR에도 자동 머지를 걸지 않는다.** `--auto`는 필수 검사가 없으면 즉시 머지로 동작해서, 검증 없이 main에 들어간다. 조건 1이 참이 되면 이 문단을 지운다.
+
+10. **Linear 마감**
    ```bash
    python3 scripts/ty.py comment TY-14 "결정 · 수치 · 다음 티켓이 알아야 할 것 + PR 링크"
    python3 scripts/ty.py state TY-14 "In Review"
    ```
    다른 티켓의 전제를 바꿨다면 그 티켓에도 코멘트를 남긴다. 워크트리는 **지우지 않는다** — PR이 머지된 뒤 `worktree.sh prune`이 걷어간다.
 
-9. **3줄 요약** — 무엇을 했나 / 수치 / 사용자에게 필요한 결정(머지 포함).
+11. **3줄 요약** — 무엇을 했나 / 수치 / 사용자에게 필요한 결정(머지 포함).
 
 ## 큐 모드 — `/ticket next`
 
@@ -71,19 +115,26 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
    ```
    `next`의 "진행 중" 항목은 **사람이 머지해야 열리는 것들**이다. 큐가 비어 있으면 더 할 일이 없는 게 아니라 머지 대기다 — 그 목록을 사용자에게 보여주고 멈춘다.
 
-2. 큐에 나온 티켓들에 대해 `Agent`를 띄운다(`subagent_type: "general-purpose"`). 큐의 티켓은 서로 다른 epic에 속하고 전부 main에서 갈라지므로 **동시에 띄워도 된다.** 프롬프트에 넣을 것:
-   - 티켓 번호와 "`.claude/skills/ticket/SKILL.md`의 단일 모드 1~8단계를 따르라"
-   - 저장소 경로와 `CLAUDE.md`를 먼저 읽으라는 지시
-   - 돌려줄 보고 형식: `티켓 / PR 링크 / 수치 / 막힌 점(있으면)` 4줄
+2. 큐에 나온 티켓들에 대해 `Agent`를 띄운다(`subagent_type: "general-purpose"`). 큐의 티켓은 서로 다른 epic에 속하고 전부 main에서 갈라지므로 **동시에 띄워도 된다.**
 
-3. 에이전트 보고를 받으면 큐를 다시 읽는다. **다음 중 하나면 멈추고 사용자에게 보고한다.**
+   **모델은 `ty.py next`가 티켓마다 찍어준 값을 그대로 `model` 인자에 넣는다** — `opus`(구조 티켓) 또는 `sonnet`(구현 티켓). 드라이버가 임의로 바꾸지 않는다. 판단 기준은 `CLAUDE.md` "어느 모델로 도는가"에 있고, 라벨이 틀렸다고 보이면 고치지 말고 보고에 적는다.
+
+   프롬프트에 넣을 것:
+   - 티켓 번호와 "`.claude/skills/ticket/SKILL.md`의 단일 모드 **1~7단계와 10단계**를 따르라. 8단계(교차 검증)와 9단계(자동 머지)는 드라이버가 한다"
+   - 저장소 경로와 `CLAUDE.md`를 먼저 읽으라는 지시
+   - 돌려줄 보고 형식: `티켓 / 모델 / PR 링크 / 수치 / 막힌 점(있으면)` 5줄
+   - 구현 후 검증 에이전트의 지적을 받을 수 있으니 세션을 닫지 말고 대기하라는 지시
+
+3. 구현 에이전트가 PR을 올리면 **그 PR에 대해 Sonnet 검증 에이전트를 띄운다**(8단계 규칙). `BLOCK`이면 `SendMessage`로 구현 에이전트에게 지적을 전달해 재작업 1회를 시키고, 같은 검증자에게 다시 보낸다. 두 번째도 `BLOCK`이면 그 티켓은 `needs/decision`으로 넘기고 다음 티켓으로 간다.
+
+4. 에이전트 보고를 받으면 큐를 다시 읽는다. **다음 중 하나면 멈추고 사용자에게 보고한다.**
    - 큐가 비었다 — 머지 대기다. 머지할 PR 목록을 보여준다
    - 큐에 `type/spike` · `needs/decision`만 남았다
-   - 에이전트가 막혔다고 보고했다 (그 티켓에 `needs/decision` 라벨이 붙어 있는지 확인)
+   - 에이전트가 막혔다고 보고했다 (그 티켓에 `needs/decision` 라벨이 붙어 있는지 확인). **Opus로 다시 돌리지 않는다** — 약속을 바꿔야 해서 막힌 것이면 사람 게이트다
    - 에이전트가 실패했거나 CI가 깨졌다
    - 사용자가 지정한 티켓 수를 소화했다 (기본 3개)
 
-4. 마지막에 표로 보고한다: 티켓 / PR / 수치 / 상태. 그리고 사용자가 할 일(머지할 PR 목록, 필요한 결정)을 적는다.
+5. 마지막에 표로 보고한다: 티켓 / 모델 / PR / 수치 / 검증(PASS·재작업·BLOCK) / 상태. 그리고 사용자가 할 일(머지할 PR 목록, 필요한 결정)을 적는다.
 
 ### 루프를 누가 돌리나
 
@@ -93,7 +144,9 @@ description: Work a TrainYard Linear ticket end to end — worktree, branch, imp
 
 ## 하지 않는 것
 
-- PR 머지 (사람이 한다)
+- PR 머지 (사람이 한다). 9단계의 네 조건을 전부 만족할 때의 `--auto`만 예외이고, 인자 없는 `gh pr merge`는 쓰지 않는다
+- 막힌 티켓을 더 큰 모델로 재시도 — 약속을 바꿔야 해서 막힌 것이면 사람 게이트다
+- `model/opus` 라벨 임의 변경 — 틀려 보이면 보고에만 적는다
 - `main` 직접 push, force push
 - 설계 숫자 변경 — 태스크 정의 · 평가 조건표 · 인터페이스 계약은 spike에서 사람이 정한다
 - 하드웨어 주문, 레포 설정 변경, 공개 범위 변경
