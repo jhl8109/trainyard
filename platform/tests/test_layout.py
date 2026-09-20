@@ -14,7 +14,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROS_SRC = REPO_ROOT / "ros2_ws" / "src"
 
-SUBPACKAGES = ["data", "policies", "training", "evaluation", "api"]
+SUBPACKAGES = ["sim", "data", "policies", "training", "evaluation", "api"]
 
 
 def ros_packages() -> list[Path]:

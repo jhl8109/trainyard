@@ -1,0 +1,82 @@
+<!--
+  TrainYard pick-and-place 씬 (TY-13).
+
+  팔 본체는 mujoco_menagerie의 robotstudio_so101을 그대로 include 한다. 포크하지 않는
+  이유는 업스트림이 캘리브레이션·충돌 프리미티브를 계속 고치기 때문이다. `@MENAGERIE@`는
+  로드 시점에 `trainyard.sim.scene`이 실제 경로로 치환한다(MENAGERIE 환경변수).
+
+  MJX 제약 (docs/task-pick-place.md §8):
+    - 여기서 추가하는 충돌 geom은 전부 primitive(box)다. 메시는 시각 전용.
+    - equality constraint · tendon 없음.
+    - 그리퍼 패드와 물체의 마찰은 <contact><pair>로 명시한다.
+
+  좌표계: 베이스 하단 중심이 원점, +x 정면 · +y 왼쪽 · z 위, 테이블 상판 z = 0.
+  테이블·목표 존·격자 수치의 단일 출처는 config/task/pick_place.yaml이다
+  (platform/tests/test_sim_scene.py가 두 파일이 어긋나면 실패시킨다).
+-->
+<mujoco model="trainyard_pick_place">
+  <include file="@MENAGERIE@/robotstudio_so101/so101.xml"/>
+
+  <!-- include 뒤에 와야 이 meshdir가 이긴다. 상대 경로면 이 파일 기준으로 풀리므로
+       메뉴저리 assets를 찾지 못한다. -->
+  <compiler angle="radian" meshdir="@MENAGERIE@/robotstudio_so101/assets" autolimits="true"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="160" elevation="-20"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+    <material name="table" rgba="0.75 0.72 0.68 1"/>
+    <material name="cube" rgba="0.85 0.2 0.15 1"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+    <geom name="floor" size="0 0 0.05" pos="0 0 -0.02" type="plane" material="groundplane" contype="0"
+      conaffinity="0" group="2"/>
+
+    <!-- 작업 테이블. 상판이 z = 0, 작업 영역 300(x) × 400(y) mm (docs §2). -->
+    <geom name="table" type="box" size="0.15 0.2 0.01" pos="0.17 0 -0.01" material="table" condim="3"
+      friction="0.8 0.005 0.0001"/>
+
+    <!-- 목표 존 80 × 80 mm. site라서 충돌에 참여하지 않는다 — 판정은 기하 계산으로 한다. -->
+    <site name="target_zone" type="box" size="0.04 0.04 0.0005" pos="0.1 0.15 0.0005"
+      rgba="0.15 0.55 0.9 0.45"/>
+
+    <!-- 탑뷰 카메라. 포즈·해상도 확정은 TY-15 — 여기서는 테이블 전체가 들어오는지만 맞춘다. -->
+    <camera name="top_cam" pos="0.17 0 0.55" quat="1 0 0 0" fovy="45" resolution="320 240"/>
+
+    <!-- 기본 물체: 한 변 25mm 큐브, 20g (docs §2). 스폰 위치는 씬 리셋(TY-17)이 덮어쓴다. -->
+    <body name="cube" pos="0.19 -0.11 0.0125">
+      <freejoint name="cube_free"/>
+      <geom name="cube" type="box" size="0.0125 0.0125 0.0125" mass="0.02" material="cube" condim="4"
+        friction="0.8 0.005 0.0001" solref="0.01 1"/>
+    </body>
+  </worldbody>
+
+  <contact>
+    <!-- 패드-물체 접촉은 box–box로만 잡고 마찰을 명시한다 (docs §8). 명시 pair는 같은 쌍의
+         동적 접촉을 대체하므로, 잡는 힘이 업스트림 기본값에 끌려다니지 않는다. -->
+    <pair geom1="cube" geom2="fixed_jaw_box5" friction="1.2 1.2 0.005 0.0001 0.0001" solref="0.01 1"/>
+    <pair geom1="cube" geom2="fixed_jaw_box6" friction="1.2 1.2 0.005 0.0001 0.0001" solref="0.01 1"/>
+    <pair geom1="cube" geom2="fixed_jaw_box7" friction="1.2 1.2 0.005 0.0001 0.0001" solref="0.01 1"/>
+    <pair geom1="cube" geom2="moving_jaw_box1" friction="1.2 1.2 0.005 0.0001 0.0001" solref="0.01 1"/>
+    <pair geom1="cube" geom2="moving_jaw_box2" friction="1.2 1.2 0.005 0.0001 0.0001" solref="0.01 1"/>
+    <pair geom1="cube" geom2="moving_jaw_box3" friction="1.2 1.2 0.005 0.0001 0.0001" solref="0.01 1"/>
+  </contact>
+
+  <keyframe>
+    <!-- home: 팔 끝단이 테이블 중앙 60mm 위에서 수직 아래를 보고, 그리퍼는 55mm 벌린 자세.
+         팔 각도는 IK로 푼 값이다 (trainyard.sim.reach, 위치 오차 0.5mm 미만).
+         qpos = 팔 6 + 큐브 freejoint 7 = 13. -->
+    <key name="home"
+      qpos="0 -0.3822 0.5137 1.4392 0 0.5  0.19 -0.11 0.0125 1 0 0 0"
+      ctrl="0 -0.3822 0.5137 1.4392 0 0.5"/>
+  </keyframe>
+</mujoco>
